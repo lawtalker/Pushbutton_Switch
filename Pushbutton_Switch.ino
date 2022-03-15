@@ -150,13 +150,11 @@ void loop() {
 
     } /* end buttonState change */
 
-    // To avoid issues very long (~50 days) steady states due to max for an
-    // unsigned long, we periodically update buttonTime if the state doesn't
-    // change, and also add a dot to the serial monitor.  No one will hold 
-    // the button down for 50 days, but it might be untouched (and up) for that 
-    // long.  Even then, we are unlikely to click the button precisely in the
-    // very short debounce window when that happens.  But this move will fix
-    // the very rare issue.
+    // Update buttonTime periodically where it is safely a long press already.
+    // We do this to avoid a rare corner condition where, e.g., the button is 
+    // untouched for ~50 days and the next press happens to fall within what 
+    // would erroneously be treated as switch bounce, delaying action
+    // momentarily.
     else if ((millis() - buttonTime) > (4 * shortLong)) {
       buttonTime += 4 * shortLong;
       if (col > 75) {
