@@ -24,20 +24,22 @@
    A momentary-on pushbutton is debounced in software.  Every button press
    toggles the state of a controlled load.
 
-   The load is controlled using a 5v relay board using a LOW trigger and the 
-   NC terminals.  This way, when the relay board is not powered, the load is 
-   connected.  When the relay board is powered, then a LOW signal triggers 
-   the relay, and the load is then disconnected.  The NC terminals are wired 
-   to the high side, so with a LOW signal the load is not powered even if 
-   there is a short to ground.
+   The load is controlled with a low-voltage relay board using a HIGH 
+   trigger and the NC terminals.  This way, when the relay board is not 
+   powered, the load is connected.  When the relay board is powered, then a 
+   HIGH signal triggers the relay, which disconnects the load.  The NC 
+   terminals are wired to the high side (v+), so with a HIGH signal the load 
+   is not powered even if there's a short to the low side (v-), asssuming v- 
+   is the appliance ground.
    
    Optionally, the load can also be controlled on the low side with a PWM
    signal.  This can be used for, e.g., speed control (if the load is a fan)
-   or dimming (if the load is a light).  To omit this option, directly
-   connect the low side of the load to ground.  To use this option, connect
-   the low side through, e.g., a MOSFET to ground with the gate connected to
-   the PWM pin.
-
+   or dimming (if the load is an LED strip).  To omit this option, directly
+   connect the low side of the load to ground, in which case the PWM signal
+   will do nothing.  To use this option, connect the low side through, e.g., 
+   drain on a MOSFET, wiht source on the MOSFET connected to ground, and 
+   with the MOSFET gate connected to the PWM pin so that PWM controls the 
+   duty cycle for the load via the low side.
 */
 
 /* constants */
@@ -47,24 +49,24 @@ const byte pinB = 2;  // pushbutton
 const byte pinL = 3;  // load relay trigger (high side control)
 const byte pinD = 5;  // PWM (low side control)
 
-// ms delay for debouncing
+// ms delay for debouncing button
 const unsigned long debounceDelay = 50;
 
-// ms threshold between short/long presses
+// ms threshold between short/long button presses
 const unsigned long shortLong = 500;
 
-// array for PWM levels, with initial duty in first slot
+// array for PWM duty levels, with initial duty in first slot
 const byte pwm[] = {255, 46, 1, 46};
 const byte sizeP = 4;
 
 /* variables */
 
-byte buttonState = HIGH;        // current button state
-byte buttonProcessed = HIGH;    // last processed button state
-unsigned long lastChange = 0;   // last change time
+byte buttonState = HIGH;        // raw button state
+byte buttonProcessed = HIGH;    // processed button state
+unsigned long lastChange = 0;   // last raw change time
 unsigned long buttonTime = 0;   // last debounced change time
 byte duty = 0;                  // index for PWM array
-byte col;                       // track col in monitor for dots
+byte col;                       // column in monitor (for line wrapping)
 
 void setup() {
   pinMode(pinB, INPUT_PULLUP);  // momentary-on pushbutton
@@ -78,52 +80,53 @@ void setup() {
   Serial.println();
   Serial.println();
   Serial.println("*** BEGIN pushbutton toggle for load control.");
-  Serial.println("Press to toggle load.");
+  Serial.print("Load is on at ");
+  Serial.print(pwm[duty]);
+  Serial.println(" duty.  Press button to toggle load.");
   Serial.print("Long press when load is on changes duty cycle.");
   col = 46;
   // we end with print() not println() to allow trailing dots.
 } /* end setup() */
 
 /*
-   In our main loop, we check to see if the button has changed state.  If it
-   has, we debounce by waiting until the button has settled into its new
-   state.  Once it does so, we take appropriate action, distinguishing
-   between short and long button presses.
-
+   We check to see if the button has changed state.  If not, we take action 
+   only if the button has settled into its new state (i.e. we debounce).  
+   After debouncing, we take appropriate action, distinguishing between 
+   short and long button presses.  
 */
 void loop() {
 
-  // if reported state of button changes note new state and time
+  // raw button change (prior to debouncing)
   if (buttonState != digitalRead(pinB)) {
     buttonState ^= 1;
     lastChange = millis();
   }
 
-  // if buttonState has not changed, check if we're outside bounce window
+  // software button debounce (do nothing for recent raw button changes)
   else if ((millis() - lastChange) > debounceDelay) {
 
-    // debounced buttonState just went up or down
+    // debounced button change
     if (buttonProcessed != buttonState) {
 
-      // button up event (due to internal pullup, up == HIGH)
+      // button up (due to internal pullup, up == HIGH)
       if (buttonState) {
 
         Serial.println();
         Serial.print("Button up: ");  // 11 characters
 
-        // if load off, turn on load for short or long press
-        if (!digitalRead(pinL)) {
-          digitalWrite(pinL,HIGH);
+        // load on (when load off - trigger is HIGH)
+        if (digitalRead(pinL)) {
+          digitalWrite(pinL,LOW);
           Serial.print("load off.");
           col = 20;
         }
-        // if load on and short press, turn off load
+        // load off (load on and short press)
         else if (((millis() - buttonTime) < shortLong)) {
-          digitalWrite(pinL,LOW);
+          digitalWrite(pinL,HIGH);
           Serial.print("short press; load off.");
           col = 33;
         } 
-        // long press when load is on, change duty
+        // change duty (load on and long press)
         else {
           duty = (duty + 1) % sizeP;
           analogWrite(pinD, pwm[duty]);
@@ -137,26 +140,24 @@ void loop() {
         
       } /* end button up */
 
-      // button was just pressed down
+      // button down
       else {
+        // just reporting; actions on button up
         Serial.println();
         Serial.print("Button down.");
         col = 12;
       } /* end button down */
 
-      // note that we've processed this change in buttonState and time
+      // debounced button change flag & time
       buttonProcessed = buttonState;
       buttonTime = lastChange;
 
-    } /* end buttonState change */
+    } /* end debounced button change */
 
-    // Update buttonTime periodically where it is safely a long press already.
-    // We do this to avoid a rare corner condition where, e.g., the button is 
-    // untouched for ~50 days and the next press happens to fall within what 
-    // would erroneously be treated as switch bounce, delaying action
-    // momentarily.
-    else if ((millis() - buttonTime) > (4 * shortLong)) {
-      buttonTime += 4 * shortLong;
+    // keep (millis() - times) from overflowing 
+    else if ((millis() - buttonTime) > (2 * shortLong)) {
+      buttonTime += shortLong;
+      lastChange += shortLong;
       if (col > 75) {
         Serial.println();
         Serial.print(".");
@@ -166,8 +167,8 @@ void loop() {
         Serial.print(" .");
         col += 2;
       }
-    } /* end steady state */
+    } /* end debounced button steady state */
 
-  } /* end debounced button processing */
+  } /* end debounced button */
 
 } /* end loop() */
