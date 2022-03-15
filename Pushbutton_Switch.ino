@@ -30,7 +30,7 @@
    the relay, and the load is then disconnected.  The NC terminals are wired 
    to the high side, so with a LOW signal the load is not powered even if 
    there is a short to ground.
-
+   
    Optionally, the load can also be controlled on the low side with a PWM
    signal.  This can be used for, e.g., speed control (if the load is a fan)
    or dimming (if the load is a light).  To omit this option, directly
@@ -80,7 +80,7 @@ void setup() {
   Serial.println("*** BEGIN pushbutton toggle for load control.");
   Serial.println("Press to toggle load.");
   Serial.print("Long press when load is on changes duty cycle.");
-  col = 56;
+  col = 46;
   // we end with print() not println() to allow trailing dots.
 } /* end setup() */
 
@@ -130,9 +130,11 @@ void loop() {
           Serial.print("long press; level ");
           Serial.print(pwm[duty]);
           Serial.print(".");
-          col = 34; // could be as little as 32
+          col = 31;
+          if (pwm[duty] > 9) col++;
+          if (pwm[duty] > 99) col++;
         }
-
+        
       } /* end button up */
 
       // button was just pressed down
