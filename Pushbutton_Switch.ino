@@ -117,7 +117,7 @@ void loop() {
         // load on (when load off - trigger is HIGH)
         if (digitalRead(pinL)) {
           digitalWrite(pinL,LOW);
-          Serial.print("load off.");
+          Serial.print("load on.");
           col = 20;
         }
         // load off (load on and short press)
