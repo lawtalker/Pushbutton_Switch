@@ -1,3 +1,4 @@
+//#define DEBUG
 /****************************************************************************
 
   =========================================
@@ -37,7 +38,7 @@
    or dimming (if the load is an LED strip).  To omit this option, directly
    connect the low side of the load to ground, in which case the PWM signal
    will do nothing.  To use this option, connect the low side through, e.g., 
-   drain on a MOSFET, wiht source on the MOSFET connected to ground, and 
+   drain on a MOSFET, with source on the MOSFET connected to ground, and 
    with the MOSFET gate connected to the PWM pin so that PWM controls the 
    duty cycle for the load via the low side.
 */
@@ -56,36 +57,35 @@ const unsigned long debounceDelay = 50;
 const unsigned long shortLong = 500;
 
 // array for PWM duty levels, with initial duty in first slot
-const byte pwm[] = {255, 46, 1, 46};
-const byte sizeP = 4;
-
+const byte duty[] = {255, 46, 1, 46};
+const byte dutyS = 4;
 /* variables */
 
 byte buttonState = HIGH;        // raw button state
 byte buttonProcessed = HIGH;    // processed button state
 unsigned long lastChange = 0;   // last raw change time
 unsigned long buttonTime = 0;   // last debounced change time
-byte duty = 0;                  // index for PWM array
+byte dutyI = 0;                 // index for PWM array
 byte col;                       // column in monitor (for line wrapping)
 
 void setup() {
-  pinMode(pinB, INPUT_PULLUP);  // momentary-on pushbutton
+  pinMode(pinB, INPUT_PULLUP);  // use external pullup for long wire run
   pinMode(pinL, OUTPUT);        // trigger for load relay
   pinMode(pinD, OUTPUT);        // PWM signal for load
-  analogWrite(pinD, pwm[duty]);
+  analogWrite(pinD, duty[dutyI]);
+
   Serial.begin(115200);
-  while (!Serial) {
-    ;
-  }
-  Serial.println();
-  Serial.println();
-  Serial.println("*** BEGIN pushbutton toggle for load control.");
+  digitalWrite(LED_BUILTIN,HIGH);
+  delay(3000);
+  digitalWrite(LED_BUILTIN,LOW);
+  Serial.println("\r\n\r\n*** BEGIN pushbutton toggle for load control.");
   Serial.print("Load is on at ");
-  Serial.print(pwm[duty]);
+  Serial.print(duty[dutyI]);
   Serial.println(" duty.  Press button to toggle load.");
   Serial.print("Long press when load is on changes duty cycle.");
   col = 46;
   // we end with print() not println() to allow trailing dots.
+  
 } /* end setup() */
 
 /*
@@ -108,12 +108,11 @@ void loop() {
     // debounced button change
     if (buttonProcessed != buttonState) {
 
-      // button up (due to internal pullup, up == HIGH)
+      // button up (with pullup, up == HIGH)
       if (buttonState) {
-
-        Serial.println();
-        Serial.print("Button up: ");  // 11 characters
-
+        
+        Serial.print("\r\nButton up: ");  // col 11
+        
         // load on (when load off - trigger is HIGH)
         if (digitalRead(pinL)) {
           digitalWrite(pinL,LOW);
@@ -128,14 +127,14 @@ void loop() {
         } 
         // change duty (load on and long press)
         else {
-          duty = (duty + 1) % sizeP;
-          analogWrite(pinD, pwm[duty]);
+          dutyI = (dutyI + 1) % dutyS;
+          analogWrite(pinD, duty[dutyI]);
           Serial.print("long press; level ");
-          Serial.print(pwm[duty]);
+          Serial.print(duty[dutyI]);
           Serial.print(".");
           col = 31;
-          if (pwm[duty] > 9) col++;
-          if (pwm[duty] > 99) col++;
+          if (duty[dutyI] > 9) col++;
+          if (duty[dutyI] > 99) col++;
         }
         
       } /* end button up */
@@ -143,11 +142,12 @@ void loop() {
       // button down
       else {
         // just reporting; actions on button up
-        Serial.println();
-        Serial.print("Button down.");
+        
+        Serial.print("\r\nButton down.");
         col = 12;
+        
       } /* end button down */
-
+      
       // debounced button change flag & time
       buttonProcessed = buttonState;
       buttonTime = lastChange;
@@ -159,8 +159,7 @@ void loop() {
       buttonTime += shortLong;
       lastChange += shortLong;
       if (col > 75) {
-        Serial.println();
-        Serial.print(".");
+        Serial.print("\r\n.");
         col = 1;
       }
       else {
