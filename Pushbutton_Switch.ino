@@ -24,22 +24,28 @@
    A momentary-on pushbutton is debounced in software.  Every button press
    toggles the state of a controlled load.
 
-   The load is controlled with a low-voltage relay board using a HIGH 
-   trigger and the NC terminals.  This way, when the relay board is not 
-   powered, the load is connected.  When the relay board is powered, then a 
-   HIGH signal triggers the relay, which disconnects the load.  The NC 
-   terminals are wired to the high side (v+), so with a HIGH signal the load 
-   is not powered even if there's a short to the low side (v-), asssuming v- 
-   is the appliance ground.
-   
-   Optionally, the load can also be controlled on the low side with a PWM
-   signal.  This can be used for, e.g., speed control (if the load is a fan)
-   or dimming (if the load is an LED strip).  To omit this option, directly
-   connect the low side of the load to ground, in which case the PWM signal
-   will do nothing.  To use this option, connect the low side through, e.g., 
-   drain on a MOSFET, with source on the MOSFET connected to ground, and 
-   with the MOSFET gate connected to the PWM pin so that PWM controls the 
-   duty cycle for the load via the low side.
+   The load (in this instance, 24v LED strip lights) could be controlled via 
+   the high side (v+) or the low side (v-).  High side control has the 
+   advantage of offering better protection against shorts, because the high
+   side is probably hot, so by controlling the high side you avoid sending 
+   current to the load in the event of a short.  Low side control has the 
+   advantage of convenience, as it is easily controlled via MOSFET.
+
+   The sketch offers logic for both types of control.  One option is a high-
+   side control via a low-voltage relay board using a HIGH trigger and the 
+   NC terminals.  (By using the NC terminals, push button toggle isn't 
+   powered, then the load operations as an unswitched load.) A second option 
+   is a MOSFET on the low side, which the sketch controls via a PWM-pin  
+   This allows for dimming (for a light) or speed control (for a fan).  The 
+   sketch offers a choice of several duty levels, which can be chosen by 
+   long clicks while the load is on.
+
+   Only one of these options needs to be wired up.  If you want a simple on-
+   off switch, you can just wire up a relay on the high side of the load.  
+   If you need dimming or PWM control, and you are not concerned about short 
+   protection (e.g. if the voltage is low), you can just wire up the low 
+   side with a MOSFET.  If you want to protect against a short in the load 
+   and want to control the duty cycle, wire up both. 
 */
 
 /* constants */
@@ -115,12 +121,14 @@ void loop() {
         // load on (when load off - trigger is HIGH)
         if (digitalRead(pinL)) {
           digitalWrite(pinL,LOW);
+          analogWrite(pinD, duty[dutyI]);
           Serial.print("load on.");
           col = 20;
         }
         // load off (load on and short press)
         else if (((millis() - buttonTime) < shortLong)) {
           digitalWrite(pinL,HIGH);
+          analogWrite(pinD, 0);
           Serial.print("short press; load off.");
           col = 33;
         } 
